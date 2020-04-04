@@ -54,3 +54,47 @@ class AddEditPlacesTests(LiveServerTestCase):
         assert 'Tokyo' in self.selenium.page_source
         assert 'New York' in self.selenium.page_source
         assert 'Denver' in self.selenium.page_source
+
+    def test_mark_place_as_visited(self):
+        self.selenium.get(self.live_server_url)#load home page
+        visited_button = self.selenium.find_element_by_id('visited-button-2')
+        visited_button.click()# click button
+
+        wait = WebDriverWait(self.selenium, 3)
+        ny_has_gone = wait.until(EC.invisibility_of_element_located((By.ID, 'place-name-2')))
+        ny_has_gone.send_keys([2])
+        self.assertIn('San Francisco', self.selenium.page_source) #assert San Fracisco is stil on page
+        self.assertNotIn('New York', self.selenium.page_source) #but New York is not
+        self.selenium.get(self.live_server_url + '/visited') #load visited page
+        self.assertIn('New York', self.selenium.page_source) #New York now should be on visited page
+        self.assertIn('Tokyo', self.selenium.page_source)
+        self.assertIn('Moab', self.selenium.page_source)
+
+class PageContentTests(LiveServerTestCase):
+    fixtures = ['test_users','test_places']
+
+    def seUp(self):
+        self.browser = webdriver.Firefox()
+        self.browser.implicitly_wait(3)
+        self.browser.get(self.live_server_url + '/admin') # expect to be redirected to login page
+        self.browser.find_element_by_id('id_username').send_keys('alice')
+        self.browser.find_element_by_id('id_password').send_keys('qwertyuiop')
+        self.browser.find_element_by_css_selector('input[type="submit"]').click()
+
+    def tearDown(self):
+        self.browser.quit()
+
+    def test_get_home_page_list_of_places(self):
+        self.browser.get(self.live_server_url)
+        self.assertIn('San Francisco', self.browser.page_source)
+        self.assertIn('New York', self.browser.page_source)
+        self.assertNotIn('Tokyo', self.browser.page_source)
+        self.assertNotIn('Moab', self.browser.page_source)
+
+    def test_get_list_of_visited_places(self):
+        self.browser.get(self.live_server_url + '/visited')
+        self.assertIn('Tokyo', self.browser.page_source)
+        self.assertIn('Moab', self.browser.page_source)
+
+        self.assertNotIn('San Francisco', self.browser.page_source)
+        self.assertNotIn('New York', self.browser.page_source)
