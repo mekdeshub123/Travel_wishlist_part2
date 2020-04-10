@@ -33,9 +33,9 @@ class TestWishList(TestCase):
         response = self.client.get(reverse('place_list'))
         self.assertTemplateUsed(response, 'travel_wishlist/wishlist.html')
 
-        self.assertContains(response, 'Tokyo')
+        self.assertNotContains(response, 'Tokyo')
         self.assertContains(response, 'New York')
-        self.assertNotContains(response, 'San Francisco')
+        self.assertContains(response, 'San Francisco')
         self.assertNotContains(response, 'Moab')
 
 #Test for no places visited message
@@ -52,20 +52,23 @@ class TestNoPlaceVisitedYetMessage(TestCase):
 
 #Test only visited places displayed
 class TestVisitedPlaces(TestCase):
-    fixtures = ['test_places']
+    fixtures = ['test_users','test_places']
+    def setUp(self):
+        user = User.objects.get(pk=1)
+        self.client.force_login(user)
 
-    def TestVisitedPlacesAreDisplayed(self):
-        response = self.client.get(reverse, 'place_list')
+    def testVisitedPlacesAreDisplayed(self):
+        response = self.client.get(reverse('places_visited'))
         self.assertTemplateUsed(response, 'travel_wishlist/visited.html')
-        self.assertNotContains(response, 'Tokyo')
+        self.assertContains(response, 'Tokyo')
         self.assertNotContains(response, 'New York')
-        self.assertContains(response, 'San Francisco')
+        self.assertNotContains(response, 'San Francisco')
         self.assertContains(response, 'Moab')
 
         
 #Test adding new place
 class TestAddNewPlace(TestCase):
-    fixtures = ['test_users']
+    fixtures = ['test_users', 'test_places']
     def setUp(self):
         user = User.objects.get(pk=1)
         self.client.force_login(user)
@@ -74,7 +77,7 @@ class TestAddNewPlace(TestCase):
         response = self.client.post(reverse('place_list'), {'name': 'Tokyo', 'visited': False}, follow=True)
         self.assertTemplateUsed(response, 'travel_wishlist/wishlist.html')
         response_places = response.context['places']
-        self.assertEqual(len(response_places), 1)
+        self.assertNotEqual(len(response_places), 1)
         tokyo_response = response_places[0]
         tokyo_in_database = Place.objects.get(name='Tokyo', visited=False)
         self.assertEqual(tokyo_response, tokyo_in_database)
@@ -103,7 +106,7 @@ class TestPlaceDetail(TestCase):#load this data into the database for all tstes 
         user = User.objects.get(pk=1)
         self.client.force_login(user)
     def test_modify_place_by_unauthorized_user(self):
-        response = self.client.post(reverse('place_detail', kwargs={'place_pk':5}), {'notes':'awesome'}, follow=True)
+        response = self.client.post(reverse('place_details', kwargs={'place_pk':5}), {'notes':'awesome'}, follow=True)
         self.assertEqual(403, response.status_code) #403 is Formidden
 
     def test_place_detail(self):
@@ -116,19 +119,19 @@ class TestPlaceDetail(TestCase):#load this data into the database for all tstes 
         self.assertContains(response, 'cool')# it suppose to show correct data on page
         self.assertContains(response, '2014-01-01')# it suppose to show correct data on page
 
-    def test_modify_notes(self):
-        updated_place_1 = Place.objects.get(pk=1)
+    def test_modify_notes(self):        
         response = self.client.post(reverse('place_details', kwargs={'place_pk':1}), {'notes':'awesome'}, follow=True)
+        updated_place_1 = Place.objects.get(pk=1)
         self.assertTemplateUsed(response, 'travel_wishlist/place_detail.html')#check the correct templet was used
         self.assertEqual(response.context['place'], updated_place_1)
-        self.assertEqual('awesome', updated_place_1.notes)#ubdate database
+        self.assertEqual('awesome', updated_place_1.notes)#chacking database
         #corrct data showen on the page
         self.assertNotContains(response, 'cool')  # old text is gone 
         self.assertContains(response, 'awesome')  # new text shown
 
     def test_add_notes(self):
         response = self.client.post(reverse('place_details', kwargs={'place_pk':4}), {'notes':'yay'}, follow=True)
-        updated_place_4 = Place.objectsget(pk=4)
+        updated_place_4 = Place.objects.get(pk=4)
         self.assertEqual('yey', updated_place_4.notes)
         #Correct object used in response
         self.assertEqual(response.context['place'], updated_place_4)
@@ -158,7 +161,7 @@ class TestImageUpload(TestCase):
         handle, tmp_img_file = tempfile.mkstemp(suffix='.jpg')
         img = Image.new('RGB', (10, 10))
         img.save(tmp_img_file, format='JPEG')
-        return handle, tmp_img_file 
+        return tmp_img_file 
 
     def test_upload_new_image_for_own_place(self):
         img_file_path = self.create_temp_image_file()
@@ -186,7 +189,7 @@ class TestImageUpload(TestCase):
                     resp = self.client.post(reverse('place_details', kwargs={'place_pk':1}), {'photo': second_img_file}, follow=True)
                     #first file should go, and the secon file should exist
                     place_1 = Place.objects.get(pk=1)
-                    second_uploaded_image = Place_1.photo.name
+                    second_uploaded_image = place_1.photo.name
                     first_path = os.path.join(self.MEDIA_ROOT, first_uploaded_image)
                     second_path = os.path.join(self.MEDIA_ROOT, second_uploaded_image)
                     self.assertFalse(os.path.exists(first_path))
@@ -196,7 +199,7 @@ class TestImageUpload(TestCase):
         with self.settings(MEDIA_ROOT=self.MEDIA_ROOT):
             img_file = self.create_temp_image_file()
             with open(img_file, 'rb')as image:
-                resp = self.client.post(reverse('place_detail',kwargs={'place_pk: 5'}), {'photo':image}, follow=True)
+                resp = self.client.post(reverse('place_details',kwargs={'place_pk': 5}), {'photo':image}, follow=True)
                 self.assertEqual(403, resp.status_code)
                 place_5 = Place.objects.get(pk=5)
                 self.assertFalse(place_5.photo)
